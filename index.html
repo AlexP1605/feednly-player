@@ -89,8 +89,17 @@
       const progressBar = document.getElementById("progress-bar");
       const muteIndicator = document.getElementById("mute-indicator");
 
+      const attemptPlay = async () => {
+        try {
+          await video.play();
+        } catch (error) {
+          // Autoplay can be blocked until user interaction.
+        }
+      };
+
       if (playbackId) {
         video.src = `https://stream.mux.com/${encodeURIComponent(playbackId)}.m3u8`;
+        video.load();
       }
       video.muted = true;
       video.autoplay = true;
@@ -109,9 +118,12 @@
       };
 
       video.addEventListener("timeupdate", updateProgress);
-      video.addEventListener("loadedmetadata", updateProgress);
+      video.addEventListener("loadedmetadata", () => {
+        updateProgress();
+        updateMuteIndicator();
+        attemptPlay();
+      });
       video.addEventListener("volumechange", updateMuteIndicator);
-      video.addEventListener("loadedmetadata", updateMuteIndicator);
 
       document.addEventListener("DOMContentLoaded", async () => {
         if (envKey && window.mux && window.mux.monitor) {
@@ -132,6 +144,7 @@
         if (video.muted) {
           video.muted = false;
         }
+        attemptPlay();
         updateMuteIndicator();
       });
 
