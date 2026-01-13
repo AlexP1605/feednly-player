@@ -81,6 +81,7 @@
     <div id="play-overlay" aria-hidden="true"><span>▶</span></div>
     <div id="progress-track"><div id="progress-bar"></div></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@mux/mux-data@latest/dist/mux.min.js"></script>
     <script>
       const params = new URLSearchParams(window.location.search);
       const playbackId = params.get("playback_id");
@@ -126,49 +127,16 @@
         }
       };
 
-      const waitForMux = () => {
-        if (!envKey) {
-          return Promise.resolve();
-        }
-
-        return new Promise((resolve) => {
-          let done = false;
-          const finish = () => {
-            if (done) {
-              return;
-            }
-            done = true;
-            resolve();
-          };
-
-          const muxScript = document.createElement("script");
-          muxScript.src = "https://src.litix.io/core/mux.js";
-          muxScript.async = true;
-          muxScript.onload = () => {
-            if (done) {
-              return;
-            }
-            if (window.mux && window.mux.monitor) {
-              window.mux.monitor(video, {
-                debug: false,
-                data: {
-                  env_key: envKey,
-                  player_name: "feednly-player-v1",
-                  video_stream_type: "on-demand",
-                },
-              });
-            }
-            finish();
-          };
-          muxScript.onerror = finish;
-          document.head.appendChild(muxScript);
-
-          window.setTimeout(finish, 3000);
-        });
-      };
-
       document.addEventListener("DOMContentLoaded", async () => {
-        await waitForMux();
+        if (envKey && window.mux && window.mux.monitor) {
+          window.mux.monitor(video, {
+            data: {
+              env_key: envKey,
+              player_name: "feednly-player-v1",
+              video_stream_type: "on-demand",
+            },
+          });
+        }
         await startPlayback();
       });
 
