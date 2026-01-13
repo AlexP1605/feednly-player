@@ -77,7 +77,7 @@
     </style>
   </head>
   <body>
-    <video id="player" autoplay muted playsinline></video>
+    <video id="player" playsinline></video>
     <div id="play-overlay" aria-hidden="true"><span>▶</span></div>
     <div id="progress-track"><div id="progress-bar"></div></div>
 
@@ -92,25 +92,6 @@
 
       if (playbackId) {
         video.src = `https://stream.mux.com/${encodeURIComponent(playbackId)}.m3u8`;
-      }
-
-      if (envKey) {
-        const muxScript = document.createElement("script");
-        muxScript.src = "https://src.litix.io/core/mux.js";
-        muxScript.async = true;
-        muxScript.onload = () => {
-          if (window.mux) {
-            window.mux.monitor(video, {
-              debug: false,
-              data: {
-                env_key: envKey,
-                player_name: "feednly-player-v1",
-                video_stream_type: "on-demand",
-              },
-            });
-          }
-        };
-        document.head.appendChild(muxScript);
       }
 
       const updateProgress = () => {
@@ -131,7 +112,13 @@
       video.addEventListener("play", updateOverlay);
       video.addEventListener("ended", updateOverlay);
 
+      let playbackStarted = false;
+
       const startPlayback = async () => {
+        if (playbackStarted) {
+          return;
+        }
+        playbackStarted = true;
         try {
           await video.play();
         } catch (error) {
@@ -139,7 +126,51 @@
         }
       };
 
-      document.addEventListener("DOMContentLoaded", startPlayback);
+      const waitForMux = () => {
+        if (!envKey) {
+          return Promise.resolve();
+        }
+
+        return new Promise((resolve) => {
+          let done = false;
+          const finish = () => {
+            if (done) {
+              return;
+            }
+            done = true;
+            resolve();
+          };
+
+          const muxScript = document.createElement("script");
+          muxScript.src = "https://src.litix.io/core/mux.js";
+          muxScript.async = true;
+          muxScript.onload = () => {
+            if (done) {
+              return;
+            }
+            if (window.mux && window.mux.monitor) {
+              window.mux.monitor(video, {
+                debug: false,
+                data: {
+                  env_key: envKey,
+                  player_name: "feednly-player-v1",
+                  video_stream_type: "on-demand",
+                },
+              });
+            }
+            finish();
+          };
+          muxScript.onerror = finish;
+          document.head.appendChild(muxScript);
+
+          window.setTimeout(finish, 3000);
+        });
+      };
+
+      document.addEventListener("DOMContentLoaded", async () => {
+        await waitForMux();
+        await startPlayback();
+      });
 
       document.addEventListener("click", async (event) => {
         if (event.target.closest("#progress-track")) {
