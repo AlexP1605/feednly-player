@@ -1,1 +1,103 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Feednly Player</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+        touch-action: manipulation;
+      }
 
+      #player {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        object-fit: cover;
+        background: #000;
+      }
+
+      #progress-track {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.18);
+        pointer-events: none;
+        z-index: 2;
+      }
+
+      #progress-bar {
+        width: 0%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.75);
+        transform-origin: left center;
+      }
+    </style>
+  </head>
+  <body>
+    <video id="player" autoplay muted playsinline></video>
+    <div id="progress-track"><div id="progress-bar"></div></div>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const playbackId = params.get("playback_id");
+      const envKey = params.get("env_key") || "";
+
+      const video = document.getElementById("player");
+      const progressBar = document.getElementById("progress-bar");
+
+      if (playbackId) {
+        video.src = `https://stream.mux.com/${encodeURIComponent(playbackId)}.m3u8`;
+      }
+
+      if (envKey) {
+        const muxScript = document.createElement("script");
+        muxScript.src = "https://src.litix.io/core/mux.js";
+        muxScript.async = true;
+        muxScript.onload = () => {
+          if (window.mux) {
+            window.mux.monitor(video, {
+              debug: false,
+              data: {
+                env_key: envKey,
+                player_name: "feednly-player-v1",
+                video_stream_type: "on-demand",
+              },
+            });
+          }
+        };
+        document.head.appendChild(muxScript);
+      }
+
+      const updateProgress = () => {
+        const duration = Number.isFinite(video.duration) ? video.duration : 0;
+        const progress = duration > 0 ? Math.min(video.currentTime / duration, 1) : 0;
+        progressBar.style.width = `${progress * 100}%`;
+      };
+
+      video.addEventListener("timeupdate", updateProgress);
+      video.addEventListener("loadedmetadata", updateProgress);
+
+      const startPlayback = async () => {
+        try {
+          await video.play();
+        } catch (error) {
+          // Autoplay may be blocked.
+        }
+      };
+
+      document.addEventListener("DOMContentLoaded", startPlayback);
+
+    </script>
+  </body>
+</html>
