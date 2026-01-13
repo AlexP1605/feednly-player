@@ -42,10 +42,43 @@
         background: rgba(255, 255, 255, 0.75);
         transform-origin: left center;
       }
+
+      #play-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.25);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        z-index: 3;
+      }
+
+      #play-overlay.visible {
+        opacity: 1;
+      }
+
+      #play-overlay span {
+        display: inline-flex;
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.6);
+        align-items: center;
+        justify-content: center;
+        border: 2px solid rgba(255, 255, 255, 0.8);
+        color: #fff;
+        font-size: 38px;
+        padding-left: 6px;
+        box-sizing: border-box;
+      }
     </style>
   </head>
   <body>
     <video id="player" autoplay muted playsinline></video>
+    <div id="play-overlay" aria-hidden="true"><span>▶</span></div>
     <div id="progress-track"><div id="progress-bar"></div></div>
 
     <script>
@@ -55,6 +88,7 @@
 
       const video = document.getElementById("player");
       const progressBar = document.getElementById("progress-bar");
+      const playOverlay = document.getElementById("play-overlay");
 
       if (playbackId) {
         video.src = `https://stream.mux.com/${encodeURIComponent(playbackId)}.m3u8`;
@@ -85,8 +119,17 @@
         progressBar.style.width = `${progress * 100}%`;
       };
 
+      const updateOverlay = () => {
+        const showOverlay = video.paused || video.ended;
+        playOverlay.classList.toggle("visible", showOverlay);
+        playOverlay.setAttribute("aria-hidden", (!showOverlay).toString());
+      };
+
       video.addEventListener("timeupdate", updateProgress);
       video.addEventListener("loadedmetadata", updateProgress);
+      video.addEventListener("pause", updateOverlay);
+      video.addEventListener("play", updateOverlay);
+      video.addEventListener("ended", updateOverlay);
 
       const startPlayback = async () => {
         try {
@@ -97,6 +140,18 @@
       };
 
       document.addEventListener("DOMContentLoaded", startPlayback);
+
+      document.addEventListener("click", async (event) => {
+        if (event.target.closest("#progress-track")) {
+          return;
+        }
+        if (video.paused || video.ended) {
+          await startPlayback();
+        } else {
+          video.pause();
+        }
+        updateOverlay();
+      });
 
     </script>
   </body>
