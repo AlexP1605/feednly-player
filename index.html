@@ -97,7 +97,7 @@
     #progress-bar {
       position: absolute;
       bottom: 0; left: 0; right: 0;
-      height: 44px; /* zone de touch généreuse */
+      height: 44px;
       z-index: 10;
       display: flex; align-items: flex-end;
       touch-action: none;
@@ -106,7 +106,7 @@
     }
     #progress-bg {
       width: 100%;
-      height: 4px; /* visuellement fine mais zone de touch 44px */
+      height: 4px;
       background: rgba(255,255,255,0.25);
       position: relative;
       flex-shrink: 0;
@@ -169,8 +169,6 @@
 <script>
   // =============================================
   // PARAMS URL
-  // playback_id = mux playback id
-  // thumbnail   = URL miniature
   // =============================================
   const params      = new URLSearchParams(window.location.search);
   const playbackId  = params.get('playback_id') || '';
@@ -200,7 +198,13 @@
   let iconTimer      = null;
   let progressRaf    = null;
   let isDragging     = false;
-  let playEventSent  = false;
+
+  // ── Logique "vu après 2 secondes réelles de lecture" ──────────────────────
+  // On accumule le temps de lecture effectif (hors pause et seek).
+  // Quand watchedSeconds >= 2, on envoie notify('play') une seule fois.
+  let playEventSent  = false;   // notify('play') envoyé ?
+  let watchedSeconds = 0;       // secondes accumulées
+  let lastTickTime   = null;    // timestamp du dernier tick RAF (ms)
 
   // =============================================
   // MINIATURE
@@ -229,13 +233,33 @@
 
   // =============================================
   // PROGRESS RAF
+  // Accumule le temps de lecture réel et envoie
+  // notify('play') après 2 secondes effectives.
   // =============================================
-  function tickProgress() {
+  function tickProgress(now) {
+    // Accumulation du temps de lecture (seulement si la vidéo joue)
+    if (!isDragging && isPlaying && lastTickTime !== null) {
+      const delta = (now - lastTickTime) / 1000; // secondes
+      // On n'accumule que des deltas raisonnables (< 0.5s) pour éviter
+      // les sauts après un seek ou une mise en background
+      if (delta < 0.5) {
+        watchedSeconds += delta;
+      }
+      // Envoie play après 2 secondes réelles de visionnage
+      if (!playEventSent && watchedSeconds >= 2) {
+        playEventSent = true;
+        notify('play');
+      }
+    }
+    lastTickTime = now;
+
+    // Mise à jour barre de progression
     if (!isDragging && video.duration && !isNaN(video.duration)) {
       const pct = (video.currentTime / video.duration) * 100;
       progressFill.style.width = pct + '%';
       progressThumb.style.left = pct + '%';
     }
+
     progressRaf = requestAnimationFrame(tickProgress);
   }
 
@@ -257,7 +281,7 @@
   // =============================================
   progressBar.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    e.stopPropagation(); // ne pas déclencher play/pause
+    e.stopPropagation();
     isDragging = true;
     progressBar.classList.add('dragging');
     progressBar.setPointerCapture(e.pointerId);
@@ -340,7 +364,6 @@
   // TAP container — play / pause
   // =============================================
   container.addEventListener('click', (e) => {
-    // Ignorer si c'est un drag sur la progress bar
     if (e.target === progressBar || progressBar.contains(e.target)) return;
     if (!hlsUrl) return;
 
@@ -362,22 +385,23 @@
   // =============================================
   video.addEventListener('play', () => {
     isPlaying = true;
+    lastTickTime = null; // reset pour éviter un gros delta après pause
     pauseOverlay.classList.remove('visible');
     flashIcon('play');
-    if (!playEventSent) {
-      playEventSent = true;
-      notify('play');
-    }
+    // NOTE : notify('play') n'est plus envoyé ici.
+    // Il sera envoyé par tickProgress après 2s de visionnage réel.
   });
 
   video.addEventListener('pause', () => {
     isPlaying = false;
+    lastTickTime = null; // stoppe l'accumulation
     pauseOverlay.classList.add('visible');
     flashIcon('pause');
   });
 
   video.addEventListener('ended', () => {
     isPlaying = false;
+    lastTickTime = null;
     pauseOverlay.classList.remove('visible');
     centerIcon.classList.remove('visible');
     progressFill.style.width = '100%';
